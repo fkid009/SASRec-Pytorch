@@ -1,0 +1,63 @@
+# ===============================================================
+# DATA
+# ===============================================================
+data:
+  dataset: "movielens"      # dataset name, e.g., "movielens"
+  max_len: 50               # maximum sequence length for sampler/model/eval
+  num_workers: 4            # number of workers for multiprocessing sampler
+
+
+# ===============================================================
+# TRAINING
+# ===============================================================
+train:
+  num_epochs: 100
+  batch_size: 128
+  num_batches_per_epoch: 1000      # number of sampler batches per epoch
+
+  device: "cuda"                   # "cuda" or "cpu"
+  seed: 42
+
+  # evaluation interval
+  eval_interval: 2                 # evaluate every N epochs
+
+  # checkpoint & best model saving
+  best_model_path: "./checkpoints/best_model.pth"
+
+
+# ===============================================================
+# EARLY STOPPING
+# ===============================================================
+early_stopping:
+  patience: 5                      # stop if no improvement for 5 evaluations
+  min_delta: 0.0                   # required NDCG improvement to be considered "better"
+
+
+# ===============================================================
+# MODEL (SASRec or custom sequential model)
+# ===============================================================
+model:
+  model_name: "sasrec"             # currently only "sasrec" is implemented
+
+  hidden_dim: 64                   # embedding / hidden dimension
+  num_blocks: 2                    # number of transformer blocks
+  num_heads: 1                     # multi-head self-attention heads
+  dropout: 0.2                     # dropout rate
+  first_norm: true                 # true = Pre-LN, false = Post-LN
+
+
+# ===============================================================
+# OPTIMIZER
+# ===============================================================
+optimizer:
+  name: "adam"                     # optimizer name (e.g., "adam")
+  lr: 0.001
+  weight_decay: 0.0
+  betas: [0.9, 0.98]
+
+
+# ===============================================================
+# LOSS FUNCTION
+# ===============================================================
+loss:
+  name: "bce_with_logits"         # BCEWithLogitsLoss
