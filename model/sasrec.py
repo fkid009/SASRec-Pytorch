@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -255,22 +256,48 @@ def evaluate(model, dataset, max_len, is_test=False):
 
 
 
-# -----------------------------------------------------
-# Trainer
-# -----------------------------------------------------
 def trainer(
     model,
     sampler,
     optimizer,
     criterion,
     dataset,
-    max_len,
-    num_epochs,
-    num_batch,
+    max_len: int,
+    num_epochs: int,
+    num_batch: int,
+    eval_interval: int = 2,
+    patience: int = 5,
+    min_delta: float = 0.0,
+    best_model_path: str = "best_model.pth",
 ):
+    """
+    Train loop with best-model saving and early stopping based on validation NDCG@10.
+
+    Args:
+        model: PyTorch model (must have `.device` attribute and support forward(seq, pos, neg)).
+        sampler: WrapBatch-like object that has `next_batch()` method.
+        optimizer: torch optimizer.
+        criterion: loss function (e.g., BCEWithLogitsLoss).
+        dataset: data tuple required by `evaluate(model, dataset, max_len, is_test=...)`.
+        max_len: maximum sequence length.
+        num_epochs: maximum number of epochs.
+        num_batch: number of batches per epoch.
+        eval_interval: evaluate every `eval_interval` epochs.
+        patience: number of evaluations to wait for improvement before early stopping.
+        min_delta: minimum improvement in validation NDCG to be considered as "better".
+        best_model_path: file path to save the best model weights.
+    """
 
     device = model.device
-    best_val, best_test = (0, 0)
+
+    # Best metrics tracking
+    best_val_ndcg = float("-inf")
+    best_val_hr = 0.0
+    best_test_ndcg = 0.0
+    best_test_hr = 0.0
+
+    # Early stopping counter
+    epochs_without_improve = 0
 
     for epoch in range(1, num_epochs + 1):
         model.train()
@@ -279,28 +306,39 @@ def trainer(
         for _ in range(num_batch):
             _, seq, pos, neg = sampler.next_batch()
 
+            # Convert to numpy arrays (if not already)
             seq = np.array(seq)
             pos = np.array(pos)
             neg = np.array(neg)
 
+            # Forward
             pos_logits, neg_logits = model(seq, pos, neg)
 
+            # Binary labels for positive / negative logits
             pos_labels = torch.ones_like(pos_logits, device=device)
             neg_labels = torch.zeros_like(neg_logits, device=device)
 
+            # Mask positions where pos == 0 (padding)
             mask = torch.tensor(pos != 0, dtype=torch.bool, device=device)
 
             optimizer.zero_grad()
+
+            # Compute loss only on valid positions
             loss = criterion(pos_logits[mask], pos_labels[mask])
             loss += criterion(neg_logits[mask], neg_labels[mask])
+
             loss.backward()
             optimizer.step()
 
             epoch_loss += loss.item()
 
-        print(f"[Epoch {epoch}] Train Loss: {epoch_loss / num_batch:.4f}")
+        avg_train_loss = epoch_loss / num_batch
+        print(f"[Epoch {epoch}] Train Loss: {avg_train_loss:.4f}")
 
-        if epoch % 2 == 0:
+        # -------------------------------
+        # Evaluation & early stopping
+        # -------------------------------
+        if epoch % eval_interval == 0:
             model.eval()
             with torch.no_grad():
                 val_ndcg, val_hr = evaluate(model, dataset, max_len, is_test=False)
@@ -309,11 +347,28 @@ def trainer(
             print(f"  Val   - NDCG@10: {val_ndcg:.4f}, Hit@10: {val_hr:.4f}")
             print(f"  Test  - NDCG@10: {test_ndcg:.4f}, Hit@10: {test_hr:.4f}")
 
-            if val_ndcg > best_val[0]:
-                best_val = (val_ndcg, val_hr)
-                best_test = (test_ndcg, test_hr)
-                print("  ** Best model updated! **")
+            # Check improvement on validation NDCG
+            if val_ndcg > best_val_ndcg + min_delta:
+                best_val_ndcg = val_ndcg
+                best_val_hr = val_hr
+                best_test_ndcg = test_ndcg
+                best_test_hr = test_hr
+
+                # Save best model weights
+                torch.save(model.state_dict(), best_model_path)
+                print(f"  ** Best model updated and saved to '{best_model_path}' **")
+
+                epochs_without_improve = 0  # reset patience counter
+            else:
+                epochs_without_improve += 1
+                print(f"  No improvement. Patience: {epochs_without_improve}/{patience}")
+
+                # Early stopping condition
+                if epochs_without_improve >= patience:
+                    print("  >>> Early stopping triggered.")
+                    break
 
     print("========================================")
-    print(f"Best Validation : NDCG={val_ndcg:.4f} HR={val_hr:.4f}")
-    print(f"Best Test       : NDCG={test_ndcg:.4f} HR={test_hr:.4f}")
+    print(f"Best Validation : NDCG@10={best_val_ndcg:.4f}, Hit@10={best_val_hr:.4f}")
+    print(f"Best Test       : NDCG@10={best_test_ndcg:.4f}, Hit@10={best_test_hr:.4f}")
+    print(f"Best model weights saved at: {best_model_path}")
