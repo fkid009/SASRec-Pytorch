@@ -126,7 +126,7 @@ as in the original SASRec paper.
 
 ## **Acknowledgements**
 
-Inspired by the official and unofficial SASRec implementations from:
+Inspired by the official SASRec implementations from:
 
 * [https://github.com/pmixer/SASRec.pytorch/tree/main](https://github.com/pmixer/SASRec.pytorch/tree/main)
 
