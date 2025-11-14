@@ -1,7 +1,7 @@
 # **SASRec-Pytorch**
 
 PyTorch implementation of **SASRec (Self-Attentive Sequential Recommendation)**
-based on the paper:
+based on the paper for studying sequential recommender system:
 
 > **Self-Attentive Sequential Recommendation (SASRec)**
 > *Wang-Cheng Kang, Julian McAuley (ICDM 2018)*
