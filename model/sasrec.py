@@ -42,7 +42,6 @@ class SASRec(nn.Module):
         dropout_rate,
         num_blocks,
         num_heads,
-        first_norm,
         device,
     ):
         super().__init__()
@@ -57,7 +56,6 @@ class SASRec(nn.Module):
         self.dropout_rate = dropout_rate
         self.num_blocks = num_blocks
         self.num_heads = num_heads
-        self.first_norm = first_norm
         self.device = device
 
         # ---- Embeddings ----
@@ -71,7 +69,7 @@ class SASRec(nn.Module):
         self.forward_layernorms = nn.ModuleList()
         self.forward_layers = nn.ModuleList()
 
-        self.last_layernorm = nn.LayerNorm(hidden_units, eps=1e-8)
+        # self.last_layernorm = nn.LayerNorm(hidden_units, eps=1e-8)
 
         for _ in range(num_blocks):
             # LN (Self-Attention)
@@ -126,30 +124,17 @@ class SASRec(nn.Module):
         for i in range(self.num_blocks):
             seqs = seqs.transpose(0, 1)  # (T, B, H)
 
-            if self.first_norm:  # Pre-LN
-                x = self.attention_layernorms[i](seqs)
-                mha_out, _ = self.attention_layers[i](
-                    x, x, x, attn_mask=attn_mask
-                )
-                seqs = seqs + mha_out
-                seqs = seqs.transpose(0, 1)   # (B, T, H)
+            x = self.attention_layernorms[i](seqs)
+            mha_out, _ = self.attention_layers[i](
+                x, x, x, attn_mask=attn_mask
+            )
+            seqs = seqs + mha_out
+            seqs = seqs.transpose(0, 1)   # (B, T, H)
 
-                seqs = seqs + self.forward_layers[i](
-                    self.forward_layernorms[i](seqs)
-                )
-
-            else:                # Post-LN
-                mha_out, _ = self.attention_layers[i](
-                    seqs, seqs, seqs, attn_mask=attn_mask
-                )
-                seqs = self.attention_layernorms[i](seqs + mha_out)
-                seqs = seqs.transpose(0, 1)
-
-                seqs = self.forward_layernorms[i](
-                    seqs + self.forward_layers[i](seqs)
-                )
-
-        return self.last_layernorm(seqs)  # (B, T, H)
+            seqs = seqs + self.forward_layers[i](
+                self.forward_layernorms[i](seqs)
+            )
+        return seqs # self.last_layernorm(seqs)  # (B, T, H)
 
     # -------------------------------------------------
     # 학습용 Forward
