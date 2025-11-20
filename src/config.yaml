@@ -43,8 +43,6 @@ model:
   num_blocks: 2                    # number of transformer blocks
   num_heads: 1                     # multi-head self-attention heads
   dropout: 0.2                     # dropout rate
-  first_norm: true                 # true = Pre-LN, false = Post-LN
-
 
 # ===============================================================
 # OPTIMIZER
