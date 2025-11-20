@@ -57,7 +57,6 @@ model:
   num_blocks: 2
   num_heads: 1
   dropout: 0.2
-  first_norm: true
 
 optimizer:
   name: "adam"
